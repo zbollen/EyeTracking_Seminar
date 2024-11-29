@@ -461,13 +461,18 @@ p_sugary_trial
 ### Save plots
 
 ```{r, warning=FALSE, message=FALSE}
-# create a folder to save plots
+# Check if the main preprocessed directory exists
+if (!dir.exists(PreprocessMainDir)) {
+  dir.create(PreprocessMainDir) # Create the main directory if it doesn't exist
+}
+
+# Check if the subdirectory for plots exists
 AllSubDirPlot <- "Each_Part_GazePlot"
 
 if (file.exists(AllSubDirPlot)){
   setwd(file.path(PreprocessMainDir, AllSubDirPlot))
 } else {
-  dir.create(file.path(PreprocessMainDir, AllSubDirPlot))
+  dir.create(file.path(PreprocessMainDir, AllSubDirPlot)) # Create the subdirectory if it doesn't exist
   setwd(file.path(PreprocessMainDir, AllSubDirPlot))
   
 }
