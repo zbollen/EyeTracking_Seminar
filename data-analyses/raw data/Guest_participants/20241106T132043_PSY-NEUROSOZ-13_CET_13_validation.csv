@@ -1,0 +1,6 @@
+validationPoint_x,validationPoint_y,left_accuracy,left_precision,left_precision_rms,right_accuracy,right_precision,right_precision_rms
+0.500,0.500,1.819,2.705,1.989,1.909,2.415,2.065
+0.100,0.500,0.217,0.150,0.127,0.348,0.198,0.132
+0.900,0.500,0.626,0.230,0.196,0.640,0.236,0.218
+0.500,0.100,0.138,0.159,0.146,0.319,0.212,0.138
+0.500,0.900,0.796,0.337,0.338,0.208,0.185,0.188
