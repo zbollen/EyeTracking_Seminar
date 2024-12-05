@@ -20,11 +20,17 @@ librarian::shelf(
   hrbrthemes,
 )
 
-#install gar parser package
+#install gar parser package for Windows
 if (!("gar" %in% rownames(installed.packages()))) {
   install.packages("../parser/gar_0.3.0.zip", repos = NULL, type = "win.binary")
 }
 library(gar)
+
+#install gar parser package for MacOS
+# if (!("gar" %in% rownames(installed.packages()))) {
+#   install.packages("../parser/gar_0.3.0.tar.gz", repos = NULL, type = "source")
+# }
+# library(gar)
 
 ```
 
