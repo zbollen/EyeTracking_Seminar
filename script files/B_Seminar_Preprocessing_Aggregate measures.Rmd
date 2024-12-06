@@ -1,0 +1,456 @@
+---
+title: "Pre-processing script - Merge all participants files and aggregate measures"
+author: "Zoé Bollen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r package, include=FALSE, echo=FALSE}
+# install package librarian if needed
+if (!("librarian" %in% rownames(installed.packages()))) {
+  install.packages("librarian")
+}
+
+# install / load required packages
+librarian::shelf(
+  dplyr,
+  readr
+)
+```
+
+# Merge all files
+
+## Load and merge gaze-behavioural data of all participants
+
+```{r warning=FALSE}
+#set the path
+PreprocessMainDir <- '../preprocessed data'
+AllSubDirFix <- "Each_Part_Fix_Outputs"
+
+setwd(file.path(PreprocessMainDir, AllSubDirFix))
+
+#load and merge all participants data
+files_to_upload <- list.files(pattern="*.csv")
+theData_list <-lapply(files_to_upload, read.csv)
+All_Part_Data<-bind_rows(theData_list)
+```
+
+## Data check
+
+Check if all participants data are available by printing the number of participants and their individual participant codes.
+
+```{r}
+length(unique(All_Part_Data$part_ID))
+unique(All_Part_Data$part_ID)
+```
+
+## Save merged data into a single file
+
+```{r warning=FALSE}
+setwd(file.path(PreprocessMainDir))
+write.csv(All_Part_Data, file = paste("All_Part_FixBehav_Data.csv",sep=""), row.names = FALSE)
+```
+
+# Aggregate measures
+
+```{r warning=FALSE, message=FALSE}
+#load file
+setwd(file.path(PreprocessMainDir))
+
+All_Part_Data <- read_csv(file = "All_Part_FixBehav_Data.csv")
+```
+
+## Number of fixations
+
+```{r message=FALSE}
+# CALCULATE NUMBER OF FIXATIONS PER AOI
+NbFix <- All_Part_Data %>%
+  group_by (
+    part_ID,
+    sugar_craving,
+    fat_craving,
+    trial_id,
+    Left_Picture,
+    Right_Picture,
+    accuracy,
+    response_time,
+    Congruence,
+    AOI_visited) %>%
+  summarise(n = n()) %>%
+  ungroup() 
+
+# TRANSPOSE CASES TO COLUMNS TO HAVE ONE LINE PER TRIAL AND ONE COLUMN PER NUMBER OF FIXATIONS ON EACH AOI
+fixation_count <- tidyr::pivot_wider(NbFix, names_from = AOI_visited, values_from = n)
+
+# RENAME THE COLUMNS
+names(fixation_count)[names(fixation_count) == "Healthy"] <- "FixCount_Healthy"
+names(fixation_count)[names(fixation_count) == "Sugary"] <- "FixCount_Sugary"
+names(fixation_count)[names(fixation_count) == "Salty"] <- "FixCount_Salty"
+
+#NOTE AN ABSENCE OF FIXATION ON ONE AOI (NA) BY 0 FIXATION FOR RELEVANT TRIALS (TRIAL 1 TO 40 FOR SALTY AOI, TRIAL 41 TO 80 FOR SUGARY AOI)
+fixation_count$FixCount_Healthy[is.na(fixation_count$FixCount_Healthy)] <- 0 
+fixation_count$FixCount_Salty[is.na(fixation_count$FixCount_Salty) & fixation_count$trial_id %in% 1:40] <- 0 
+fixation_count$FixCount_Sugary[is.na(fixation_count$FixCount_Sugary) & fixation_count$trial_id %in% 41:80] <- 0 
+
+#CALCULATE AND ADD ONE COLUMN INDICATING THE TOTAL NUMBER OF FIXATIONS PER TRIAL
+fixation_count$FixCount_Total <- round(rowSums(fixation_count[, c("FixCount_Healthy", "FixCount_Salty", "FixCount_Sugary")], na.rm = TRUE), 2)
+
+#CALCULATE AND ADD COLUMN INDICATING THE RATIO OF FIXATIONS FOR UNHEALTHY FOOD
+fixation_count$Rel_FixCount_Salty <- round(fixation_count$FixCount_Salty/fixation_count$FixCount_Total, 2)
+fixation_count$Rel_FixCount_Sugary <- round(fixation_count$FixCount_Sugary/fixation_count$FixCount_Total, 2)
+fixation_count$Rel_FixCount_Unhealthy <- round(
+  ifelse(!is.na(fixation_count$FixCount_Sugary),
+    fixation_count$FixCount_Sugary / fixation_count$FixCount_Total,
+    fixation_count$FixCount_Salty / fixation_count$FixCount_Total),
+    2
+  )
+```
+
+## Dwell time
+
+```{r message=FALSE}
+# CALCULATE DWELL TIME PER AOI (while keeping information concerning part and trial)
+DwellTime <- All_Part_Data %>%
+  group_by (
+    part_ID,
+    sugar_craving,
+    fat_craving,
+    trial_id,
+    Left_Picture,
+    Right_Picture,
+    accuracy,
+    response_time,
+    Congruence, 
+    AOI_visited)  %>%
+  summarise(DT = sum(duration))  %>%
+  ungroup()
+
+# TRANSPOSE CASES TO COLUMNS TO HAVE ONE LINE PER TRIAL AND ONE COLUMN PER DWELL TIME ON EACH AOI
+dwell_time <- tidyr::pivot_wider(DwellTime, names_from = AOI_visited, values_from = DT)
+
+# RENAME THE COLUMNS
+names(dwell_time)[names(dwell_time) == "Healthy"] <- "DT_Healthy"
+names(dwell_time)[names(dwell_time) == "Salty"] <- "DT_Salty"
+names(dwell_time)[names(dwell_time) == "Sugary"] <- "DT_Sugary"
+
+#NOTE AN ABSENCE OF FIXATION ON ONE AOI (NA) BY 0 MS FOR RELEVANT TRIALS (TRIAL 1 TO 40 FOR SALTY AOI, TRIAL 41 TO 80 FOR SUGARY AOI)
+dwell_time$DT_Healthy[is.na(dwell_time$DT_Healthy)] <- 0 
+dwell_time$DT_Salty[is.na(dwell_time$DT_Salty) & dwell_time$trial_id %in% 1:40] <- 0 
+dwell_time$DT_Sugary[is.na(dwell_time$DT_Sugary) & dwell_time$trial_id %in% 41:80] <- 0 
+
+#CALCULATE AND ADD ONE COLUMN INDICATING THE TOTAL DWELL TIME PER TRIAL
+dwell_time$DT_Total <- round(rowSums(dwell_time[, c("DT_Healthy", "DT_Salty", "DT_Sugary")], na.rm = TRUE), 2)
+
+#CALCULATE AND ADD COLUMN INDICATING THE RELATIVE DWELL TIME FOR UNHEALTHY FOOD
+dwell_time$Rel_DT_Salty <- round(dwell_time$DT_Salty/dwell_time$DT_Total, 2)
+dwell_time$Rel_DT_Sugary <- round(dwell_time$DT_Sugary/dwell_time$DT_Total, 2)
+dwell_time$Rel_DT_Unhealthy <- round(
+  ifelse(!is.na(dwell_time$DT_Sugary), 
+         dwell_time$DT_Sugary / dwell_time$DT_Total, 
+         dwell_time$DT_Salty / dwell_time$DT_Total),
+  2
+)
+```
+
+## First fixation
+
+```{r message=FALSE}
+# CREATE A VARIABLE INDICATING THE ORDER OF FIXATIONS WITHIN EACH TRIAL
+All_Part_Data_with_fixation_order <- All_Part_Data %>%
+  arrange(part_ID, trial_id, timestamp) %>% 
+  group_by(part_ID, trial_id) %>%           
+  mutate(fixation_order = row_number()) %>% 
+  ungroup()     
+
+# CALCULATE MIN FIXATION ORDER PER AOI
+FirstFix <- All_Part_Data_with_fixation_order %>%
+  group_by (
+    part_ID,
+    sugar_craving,
+    fat_craving,
+    trial_id,
+    Left_Picture,
+    Right_Picture,
+    accuracy,
+    response_time,
+    Congruence,
+    AOI_visited)  %>%
+  summarise(Min_fix_order = min(fixation_order)) %>%
+  ungroup()
+
+# DETERMINE WHETHER THE FIRST FIXATION WAS MADE ON THE AOI
+FirstFix <- FirstFix %>%
+  mutate(
+    First_Fix = case_when(
+      Min_fix_order == 1 ~ 1,  
+      Min_fix_order > 1 ~ 0,                                   
+      TRUE ~ NA_real_)
+  ) %>%
+  select(-Min_fix_order)
+
+#PIVOT DATASET
+first_fix <- tidyr::pivot_wider(FirstFix, names_from = AOI_visited, values_from = First_Fix)
+
+# RENAME THE COLUMNS
+names(first_fix)[names(first_fix) == "Healthy"] <- "first_fix_Healthy"
+names(first_fix)[names(first_fix) == "Salty"] <- "first_fix_Salty"
+names(first_fix)[names(first_fix) == "Sugary"] <- "first_fix_Sugary"
+
+#DETERMINE WHETHER THE FIRST FIXATION WAS MADE ON UNHEALTHY FOOD
+first_fix$first_fix_Unhealthy <- 
+  ifelse(!is.na(first_fix$first_fix_Sugary), 
+         first_fix$first_fix_Sugary, 
+         first_fix$first_fix_Salty)
+
+#KEEP ONLY RELEVANT VARIABLES
+first_fix <- select(
+  first_fix,
+  part_ID,
+  sugar_craving,
+  fat_craving,
+  trial_id,
+  first_fix_Salty,
+  first_fix_Sugary, 
+  first_fix_Unhealthy
+)
+```
+
+# Merge measures in one single dataset
+
+```{r}
+#longer format
+list_measures_AOI <- list(DwellTime, FirstFix, NbFix)
+All_Measures_PerAOI <- Reduce(function(x, y) merge(x, y, all=TRUE), list_measures_AOI) 
+
+#wider format
+list_measures_Trial <- list(dwell_time, first_fix, fixation_count)
+All_Measures_PerTrial <- Reduce(function(x, y) merge(x, y, all=TRUE), list_measures_Trial)  
+```
+
+# Data reduction procedure
+
+## Exclude trials with uncorrect responses
+
+Remove all trials in which participants did not answer correctly to the probe
+
+```{r}
+# Count the number of trials where accuracy = 0
+num_uncorrect_trials <- All_Measures_PerTrial %>%
+  group_by(trial_id) %>%
+  summarise(uncorrect = any(accuracy == 0)) %>%
+  filter(uncorrect) %>%
+  nrow()
+
+# Print the result
+print(num_uncorrect_trials)
+
+# Keep only rows where responses are correct
+All_Measures_PerTrial <- subset(All_Measures_PerTrial, accuracy == 1)
+All_Measures_PerAOI <- subset(All_Measures_PerAOI, accuracy == 1)
+```
+
+## Exclude trials when response time \< 200ms
+
+```{r}
+# Filter to find trials with decision < 200ms
+trials_RT_lower_200ms <- All_Measures_PerTrial %>%
+  filter(response_time < 200)
+
+# Print the result
+print(trials_RT_lower_200ms)
+
+# Exclude those trials
+All_Measures_PerTrial <- All_Measures_PerTrial %>%
+  filter(response_time >= 200)
+All_Measures_PerAOI <- All_Measures_PerAOI %>%
+  filter(response_time >= 200)
+```
+
+## Exclude trials when response time \> 2000ms
+
+```{r}
+# Filter to find trials with decision > 2000ms
+trials_RT_higher_2000ms <- All_Measures_PerTrial %>%
+  filter(response_time > 2000)
+
+# Print the result
+print(trials_RT_higher_2000ms)
+
+# Exclude those trials
+All_Measures_PerTrial <- All_Measures_PerTrial %>%
+  filter(response_time <= 2000)
+All_Measures_PerAOI <- All_Measures_PerAOI %>%
+  filter(response_time <= 2000)
+```
+
+## Exclude participants with half of trials without fixations
+
+```{r}
+# Create a summary of the number of trials per subject
+subject_trial_count <- All_Measures_PerTrial %>%
+  group_by(part_ID) %>%
+  summarize(trial_count = n()) %>%
+  ungroup()
+
+# Filter to find subjects with fewer than 40 trials
+subjects_with_fewer_than_40_trials <- subject_trial_count %>%
+  filter(trial_count < 40)
+
+# View the subjects with fewer than 40 trials
+print(subjects_with_fewer_than_40_trials)
+
+# Filter to find subjects with at least half of the trials
+subjects_with_40_or_more_trials <- subject_trial_count %>%
+  filter(trial_count >= 40)
+
+# Exclude the participant(s) 
+All_Measures_PerTrial <- All_Measures_PerTrial %>%
+  filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)
+All_Measures_PerAOI <- All_Measures_PerAOI %>%
+  filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)
+```
+
+# Calculate reaction time AB scores
+
+## Calculate RT AB score for unhealthy versus healthy food
+
+```{r message=FALSE}
+# CALCULATE MEAN REACTION TIME PER CONGRUENCE
+RT_PerCongruence <- All_Measures_PerTrial %>%
+  group_by(part_ID, Congruence) %>%
+  summarize(RT = mean(response_time)) %>%
+  ungroup()
+
+# RENAME THE CONGRUENCE VALUES
+RT_PerCongruence <- RT_PerCongruence %>%
+  mutate(Congruence = recode(Congruence, 
+                              "0" = "Uncongruent",
+                              "1" = "Congruent"))
+
+# TRANSPOSE CASES TO COLUMNS TO HAVE ONE LINE PER TRIAL AND ONE COLUMN PER DWELL TIME ON EACH AOI
+Reaction_Time <- tidyr::pivot_wider(RT_PerCongruence, names_from = Congruence, values_from = RT)
+
+#CALCULATE THE REACTION TIME AB SCORE (POSITIVE VALUES INDICATED A BIAS TOWARDS UNHEALTHY FOOD AND NEGATIVE VALUES INDICATED A BIAS TOWARDS HEALTHY FOOD)
+Reaction_Time$RT_AB_score <- round(Reaction_Time$Uncongruent - Reaction_Time$Congruent, 2)
+
+#KEEP ONLY RELEVANT VARIABLES
+Reaction_Time <- select(
+  Reaction_Time,
+  part_ID,
+  RT_AB_score
+)
+```
+
+## Calculate RT AB score for salty versus healthy food
+
+```{r message=FALSE}
+# CALCULATE MEAN REACTION TIME PER CONGRUENCE ONLY IN TRIALS WITH SALTY FOOD
+RT_Salty_PerCongruence <- All_Measures_PerTrial %>%
+  filter(trial_id >= 1 & trial_id <= 40) %>%
+  group_by(part_ID, Congruence) %>%
+  summarize(RT = mean(response_time)) %>%
+  ungroup()
+
+# RENAME THE CONGRUENCE VALUES
+RT_Salty_PerCongruence <- RT_Salty_PerCongruence %>%
+  mutate(Congruence = recode(Congruence, 
+                              "0" = "Uncongruent",
+                              "1" = "Congruent"))
+
+# TRANSPOSE CASES TO COLUMNS TO HAVE ONE LINE PER TRIAL AND ONE COLUMN PER DWELL TIME ON EACH AOI
+Reaction_Time_Salty <- tidyr::pivot_wider(RT_Salty_PerCongruence, names_from = Congruence, values_from = RT)
+
+#CALCULATE THE REACTION TIME AB SCORE (POSITIVE VALUES INDICATED A BIAS TOWARDS UNHEALTHY FOOD AND NEGATIVE VALUES INDICATED A BIAS TOWARDS HEALTHY FOOD)
+Reaction_Time_Salty$RT_Salty_AB_score <- round(Reaction_Time_Salty$Uncongruent - Reaction_Time_Salty$Congruent, 2)
+
+#KEEP ONLY RELEVANT VARIABLES
+Reaction_Time_Salty <- select(
+  Reaction_Time_Salty,
+  part_ID,
+  RT_Salty_AB_score
+)
+```
+
+## Calculate RT AB score for sugary versus healthy food
+
+```{r message=FALSE}
+# CALCULATE MEAN REACTION TIME PER CONGRUENCE ONLY IN TRIALS WITH SALTY FOOD
+RT_Sugary_PerCongruence <- All_Measures_PerTrial %>%
+  filter(trial_id >= 41 & trial_id <= 80) %>%
+  group_by(part_ID, Congruence) %>%
+  summarize(RT = mean(response_time)) %>%
+  ungroup()
+
+# RENAME THE CONGRUENCE VALUES
+RT_Sugary_PerCongruence <- RT_Sugary_PerCongruence %>%
+  mutate(Congruence = recode(Congruence, 
+                              "0" = "Uncongruent",
+                              "1" = "Congruent"))
+
+# TRANSPOSE CASES TO COLUMNS TO HAVE ONE LINE PER TRIAL AND ONE COLUMN PER DWELL TIME ON EACH AOI
+Reaction_Time_Sugary <- tidyr::pivot_wider(RT_Sugary_PerCongruence, names_from = Congruence, values_from = RT)
+
+#CALCULATE THE REACTION TIME AB SCORE (POSITIVE VALUES INDICATED A BIAS TOWARDS UNHEALTHY FOOD AND NEGATIVE VALUES INDICATED A BIAS TOWARDS HEALTHY FOOD)
+Reaction_Time_Sugary$RT_Sugary_AB_score <- round(Reaction_Time_Sugary$Uncongruent - Reaction_Time_Sugary$Congruent, 2)
+
+#KEEP ONLY RELEVANT VARIABLES
+Reaction_Time_Sugary <- select(
+  Reaction_Time_Sugary,
+  part_ID,
+  RT_Sugary_AB_score
+)
+```
+
+# Create and save datasets for analyses
+
+## Dataset containing one row per participant
+
+```{r message=FALSE}
+#Create a new dataset containing one row per participant and calculating the mean values for each measures
+All_Measures_PerPart <- All_Measures_PerTrial %>%
+  group_by(part_ID, sugar_craving, fat_craving) %>%
+  summarize(
+    Rel_DT_Sugary_mean = mean(Rel_DT_Sugary, na.rm = TRUE),
+    Rel_DT_Sugary_sd = sd(Rel_DT_Sugary, na.rm = TRUE),
+    Rel_DT_Salty_mean = mean(Rel_DT_Salty, na.rm = TRUE),
+    Rel_DT_Salty_sd = sd(Rel_DT_Salty, na.rm = TRUE),
+    Rel_DT_Unhealthy_mean = mean(Rel_DT_Unhealthy, na.rm = TRUE),
+    Rel_DT_Unhealthy_sd = sd(Rel_DT_Unhealthy, na.rm = TRUE),
+    FixCount_Total_mean = mean(FixCount_Total, na.rm = TRUE),
+    FixCount_Total_sd = sd(FixCount_Total, na.rm = TRUE),
+    Rel_FixCount_Sugary_mean = mean(Rel_FixCount_Sugary, na.rm = TRUE),
+    Rel_FixCount_Sugary_sd = sd(Rel_FixCount_Sugary, na.rm = TRUE),
+    Rel_FixCount_Salty_mean = mean(Rel_FixCount_Salty, na.rm = TRUE),
+    Rel_FixCount_Salty_sd = sd(Rel_FixCount_Salty, na.rm = TRUE),
+    Rel_FixCount_Unhealthy_mean = mean(Rel_FixCount_Unhealthy, na.rm = TRUE),
+    Rel_FixCount_Unhealthy_sd = sd(Rel_FixCount_Unhealthy, na.rm = TRUE),
+    first_fix_Sugary_mean = mean(first_fix_Sugary, na.rm = TRUE),
+    first_fix_Sugary_sd = sd(first_fix_Sugary, na.rm = TRUE),
+    first_fix_Salty_mean = mean(first_fix_Salty, na.rm = TRUE),
+    first_fix_Salty_sd = sd(first_fix_Salty, na.rm = TRUE),
+    first_fix_Unhealthy_mean = mean(first_fix_Unhealthy, na.rm = TRUE),
+    first_fix_Unhealthy_sd = sd(first_fix_Unhealthy, na.rm = TRUE),
+  ) %>%
+  ungroup()
+
+#Merge the reaction time AB score with the All_Measures_PerPart dataset
+All_Measures_PerPart <- All_Measures_PerPart %>%
+  left_join(Reaction_Time, by = "part_ID") %>%
+  left_join(Reaction_Time_Salty, by = "part_ID") %>%
+  left_join(Reaction_Time_Sugary, by = "part_ID")
+```
+
+## Save file containing all measures for analyses
+
+```{r warning=FALSE}
+setwd(file.path(PreprocessMainDir))
+
+#Save one file containing one row per AOI visited
+write.csv(All_Measures_PerAOI, file = paste("AllMeasures_ForAnalysis_PerAOI.csv",sep=""), row.names = FALSE)
+
+#Save one file containing one row per trial
+write.csv(All_Measures_PerTrial, file = paste("AllMeasures_ForAnalysis_PerTrial.csv",sep=""), row.names = FALSE)
+
+#Save one file containing one row per part
+write.csv(All_Measures_PerPart, file = paste("AllMeasures_ForAnalysis_PerPart.csv",sep=""), row.names = FALSE)
+```
