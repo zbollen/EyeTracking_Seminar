@@ -11,7 +11,7 @@
 
 <meta name="author" content="Zoé Bollen" />
 
-<meta name="date" content="2024-11-28" />
+<meta name="date" content="2024-12-11" />
 
 <title>Pre-processing script - Merge all participants files and aggregate measures</title>
 
@@ -353,7 +353,7 @@ display: none;
 <h1 class="title toc-ignore">Pre-processing script - Merge all
 participants files and aggregate measures</h1>
 <h4 class="author">Zoé Bollen</h4>
-<h4 class="date">2024-11-28</h4>
+<h4 class="date">2024-12-11</h4>
 
 </div>
 
@@ -378,13 +378,9 @@ All_Part_Data&lt;-bind_rows(theData_list)</code></pre>
 <p>Check if all participants data are available by printing the number
 of participants and their individual participant codes.</p>
 <pre class="r"><code>length(unique(All_Part_Data$part_ID))</code></pre>
-<pre><code>## [1] 22</code></pre>
+<pre><code>## [1] 1</code></pre>
 <pre class="r"><code>unique(All_Part_Data$part_ID)</code></pre>
-<pre><code>##  [1] &quot;Guest06&quot;    &quot;Guest07&quot;    &quot;Guest09&quot;    &quot;Guest10&quot;    &quot;Guest11&quot;   
-##  [6] &quot;Guest12&quot;    &quot;Guest13&quot;    &quot;Guest14&quot;    &quot;Guest15&quot;    &quot;Guest17&quot;   
-## [11] &quot;Guest19&quot;    &quot;Guest20&quot;    &quot;Guest21&quot;    &quot;Guest22&quot;    &quot;Students06&quot;
-## [16] &quot;Students07&quot; &quot;Students08&quot; &quot;Students09&quot; &quot;Students10&quot; &quot;Students11&quot;
-## [21] &quot;Students12&quot; &quot;Students13&quot;</code></pre>
+<pre><code>## [1] &quot;Students07&quot;</code></pre>
 </div>
 <div id="save-merged-data-into-a-single-file" class="section level2">
 <h2>Save merged data into a single file</h2>
@@ -398,6 +394,11 @@ write.csv(All_Part_Data, file = paste(&quot;All_Part_FixBehav_Data.csv&quot;,sep
 setwd(file.path(PreprocessMainDir))
 
 All_Part_Data &lt;- read_csv(file = &quot;All_Part_FixBehav_Data.csv&quot;)</code></pre>
+<div id="unhealthy-food-craving" class="section level2">
+<h2>Unhealthy food craving</h2>
+<pre class="r"><code>#ADD A COLUMN WHICH INDICATES THE MEAN CRAVING FOR UNHEALTHY FOOD
+All_Part_Data$unhealthy_craving &lt;- rowMeans(All_Part_Data[, c(&quot;sugar_craving&quot;, &quot;fat_craving&quot;)])</code></pre>
+</div>
 <div id="number-of-fixations" class="section level2">
 <h2>Number of fixations</h2>
 <pre class="r"><code># CALCULATE NUMBER OF FIXATIONS PER AOI
@@ -406,6 +407,7 @@ NbFix &lt;- All_Part_Data %&gt;%
     part_ID,
     sugar_craving,
     fat_craving,
+    unhealthy_craving,
     trial_id,
     Left_Picture,
     Right_Picture,
@@ -450,6 +452,7 @@ DwellTime &lt;- All_Part_Data %&gt;%
     part_ID,
     sugar_craving,
     fat_craving,
+    unhealthy_craving,
     trial_id,
     Left_Picture,
     Right_Picture,
@@ -490,9 +493,10 @@ dwell_time$Rel_DT_Unhealthy &lt;- round(
 <h2>First fixation</h2>
 <pre class="r"><code># CREATE A VARIABLE INDICATING THE ORDER OF FIXATIONS WITHIN EACH TRIAL
 All_Part_Data_with_fixation_order &lt;- All_Part_Data %&gt;%
-  group_by(trial_id) %&gt;%
-  mutate(fixation_order = row_number()) %&gt;%
-  ungroup()
+  arrange(part_ID, trial_id, timestamp) %&gt;% 
+  group_by(part_ID, trial_id) %&gt;%           
+  mutate(fixation_order = row_number()) %&gt;% 
+  ungroup()     
 
 # CALCULATE MIN FIXATION ORDER PER AOI
 FirstFix &lt;- All_Part_Data_with_fixation_order %&gt;%
@@ -500,6 +504,7 @@ FirstFix &lt;- All_Part_Data_with_fixation_order %&gt;%
     part_ID,
     sugar_craving,
     fat_craving,
+    unhealthy_craving,
     trial_id,
     Left_Picture,
     Right_Picture,
@@ -507,35 +512,26 @@ FirstFix &lt;- All_Part_Data_with_fixation_order %&gt;%
     response_time,
     Congruence,
     AOI_visited)  %&gt;%
-  summarise(First_fix = min(fixation_order)) %&gt;%
+  summarise(Min_fix_order = min(fixation_order)) %&gt;%
   ungroup()
 
+# DETERMINE WHETHER THE FIRST FIXATION WAS MADE ON THE AOI
+FirstFix &lt;- FirstFix %&gt;%
+  mutate(
+    First_Fix = case_when(
+      Min_fix_order == 1 ~ 1,  
+      Min_fix_order &gt; 1 ~ 0,                                   
+      TRUE ~ NA_real_)
+  ) %&gt;%
+  select(-Min_fix_order)
+
 #PIVOT DATASET
-first_fix &lt;- tidyr::pivot_wider(FirstFix, names_from = AOI_visited, values_from = First_fix)
+first_fix &lt;- tidyr::pivot_wider(FirstFix, names_from = AOI_visited, values_from = First_Fix)
 
-#DETERMINE WHETHER THE FIRST FIXATION WAS MADE ON SALTY FOOD
-first_fix &lt;- first_fix %&gt;%
-  mutate(
-    first_fix_Salty = case_when(
-      trial_id %in% 1:40 &amp; !is.na(Salty) &amp; !is.na(Healthy) &amp; Salty &lt; Healthy ~ 1,  # Salty &lt; Healthy
-      trial_id %in% 1:40 &amp; (is.na(Healthy)) ~ 1,                                   # First fixation on Salty if no fixation on Healthy
-      trial_id %in% 1:40 &amp; (is.na(Salty)) ~ 0,                                     # No first fixation on Salty if no fixation on Salty
-      trial_id %in% 1:40 &amp; Salty &gt; Healthy ~ 0,                                    # Salty &gt; Healthy
-      TRUE ~ NA_real_  # For trials outside 1-40, leave as NA
-    )
-  )
-
-#DETERMINE WHETHER THE FIRST FIXATION WAS MADE ON SUGARY FOOD
-first_fix &lt;- first_fix %&gt;%
-  mutate(
-    first_fix_Sugary = case_when(
-      trial_id %in% 41:80 &amp; !is.na(Sugary) &amp; !is.na(Healthy) &amp; Sugary &lt; Healthy ~ 1, # Sugary &lt; Healthy
-      trial_id %in% 41:80 &amp; (is.na(Healthy)) ~ 1,                                    # First fixation on Sugary if no fixation on Healthy
-      trial_id %in% 41:80 &amp; (is.na(Sugary)) ~ 0,                                     # No first fixation on Sugary if no fixation on Sugary
-      trial_id %in% 41:80 &amp; Sugary &gt; Healthy ~ 0,                                    # Sugary &gt; Healthy
-      TRUE ~ NA_real_  # For trials outside 41-80, leave as NA
-    )
-  )
+# RENAME THE COLUMNS
+names(first_fix)[names(first_fix) == &quot;Healthy&quot;] &lt;- &quot;first_fix_Healthy&quot;
+names(first_fix)[names(first_fix) == &quot;Salty&quot;] &lt;- &quot;first_fix_Salty&quot;
+names(first_fix)[names(first_fix) == &quot;Sugary&quot;] &lt;- &quot;first_fix_Sugary&quot;
 
 #DETERMINE WHETHER THE FIRST FIXATION WAS MADE ON UNHEALTHY FOOD
 first_fix$first_fix_Unhealthy &lt;- 
@@ -549,6 +545,7 @@ first_fix &lt;- select(
   part_ID,
   sugar_craving,
   fat_craving,
+  unhealthy_craving,
   trial_id,
   first_fix_Salty,
   first_fix_Sugary, 
@@ -581,7 +578,7 @@ num_uncorrect_trials &lt;- All_Measures_PerTrial %&gt;%
 
 # Print the result
 print(num_uncorrect_trials)</code></pre>
-<pre><code>## [1] 19</code></pre>
+<pre><code>## [1] 0</code></pre>
 <pre class="r"><code># Keep only rows where responses are correct
 All_Measures_PerTrial &lt;- subset(All_Measures_PerTrial, accuracy == 1)
 All_Measures_PerAOI &lt;- subset(All_Measures_PerAOI, accuracy == 1)</code></pre>
@@ -595,14 +592,14 @@ trials_RT_lower_200ms &lt;- All_Measures_PerTrial %&gt;%
 # Print the result
 print(trials_RT_lower_200ms)</code></pre>
 <pre><code>##  [1] part_ID                sugar_craving          fat_craving           
-##  [4] trial_id               Left_Picture           Right_Picture         
-##  [7] accuracy               response_time          Congruence            
-## [10] DT_Healthy             DT_Salty               DT_Sugary             
-## [13] DT_Total               Rel_DT_Salty           Rel_DT_Sugary         
-## [16] Rel_DT_Unhealthy       first_fix_Salty        first_fix_Sugary      
-## [19] first_fix_Unhealthy    FixCount_Healthy       FixCount_Salty        
-## [22] FixCount_Sugary        FixCount_Total         Rel_FixCount_Salty    
-## [25] Rel_FixCount_Sugary    Rel_FixCount_Unhealthy
+##  [4] unhealthy_craving      trial_id               Left_Picture          
+##  [7] Right_Picture          accuracy               response_time         
+## [10] Congruence             DT_Healthy             DT_Salty              
+## [13] DT_Sugary              DT_Total               Rel_DT_Salty          
+## [16] Rel_DT_Sugary          Rel_DT_Unhealthy       first_fix_Salty       
+## [19] first_fix_Sugary       first_fix_Unhealthy    FixCount_Healthy      
+## [22] FixCount_Salty         FixCount_Sugary        FixCount_Total        
+## [25] Rel_FixCount_Salty     Rel_FixCount_Sugary    Rel_FixCount_Unhealthy
 ## &lt;0 rows&gt; (or 0-length row.names)</code></pre>
 <pre class="r"><code># Exclude those trials
 All_Measures_PerTrial &lt;- All_Measures_PerTrial %&gt;%
@@ -618,31 +615,18 @@ trials_RT_higher_2000ms &lt;- All_Measures_PerTrial %&gt;%
 
 # Print the result
 print(trials_RT_higher_2000ms)</code></pre>
-<pre><code>##      part_ID sugar_craving fat_craving trial_id Left_Picture Right_Picture
-## 1    Guest09            90          70       14           FL            FF
-## 2    Guest19            60          30       73           FS            FL
-## 3 Students07            90          60       32           FL            FF
-## 4 Students09            80          80        5           FF            FL
-##   accuracy response_time Congruence DT_Healthy DT_Salty DT_Sugary DT_Total
-## 1        1          2021          0    650.009  183.002        NA   833.01
-## 2        1          2385          1      0.000       NA       264   264.00
-## 3        1          2476          1    652.006  566.989        NA  1218.99
-## 4        1          2137          1   1065.343  267.993        NA  1333.34
-##   Rel_DT_Salty Rel_DT_Sugary Rel_DT_Unhealthy first_fix_Salty first_fix_Sugary
-## 1         0.22            NA             0.22               0               NA
-## 2           NA             1             1.00              NA                1
-## 3         0.47            NA             0.47               0               NA
-## 4         0.20            NA             0.20               1               NA
-##   first_fix_Unhealthy FixCount_Healthy FixCount_Salty FixCount_Sugary
-## 1                   0                2              1              NA
-## 2                   1                0             NA               1
-## 3                   0                4              4              NA
-## 4                   1                6              2              NA
-##   FixCount_Total Rel_FixCount_Salty Rel_FixCount_Sugary Rel_FixCount_Unhealthy
-## 1              3               0.33                  NA                   0.33
-## 2              1                 NA                   1                   1.00
-## 3              8               0.50                  NA                   0.50
-## 4              8               0.25                  NA                   0.25</code></pre>
+<pre><code>##      part_ID sugar_craving fat_craving unhealthy_craving trial_id Left_Picture
+## 1 Students07            90          60                75       32           FL
+##   Right_Picture accuracy response_time Congruence DT_Healthy DT_Salty DT_Sugary
+## 1            FF        1          2476          1    652.006  566.989        NA
+##   DT_Total Rel_DT_Salty Rel_DT_Sugary Rel_DT_Unhealthy first_fix_Salty
+## 1  1218.99         0.47            NA             0.47               0
+##   first_fix_Sugary first_fix_Unhealthy FixCount_Healthy FixCount_Salty
+## 1               NA                   0                4              4
+##   FixCount_Sugary FixCount_Total Rel_FixCount_Salty Rel_FixCount_Sugary
+## 1              NA              8                0.5                  NA
+##   Rel_FixCount_Unhealthy
+## 1                    0.5</code></pre>
 <pre class="r"><code># Exclude those trials
 All_Measures_PerTrial &lt;- All_Measures_PerTrial %&gt;%
   filter(response_time &lt;= 2000)
@@ -663,17 +647,8 @@ subjects_with_fewer_than_40_trials &lt;- subject_trial_count %&gt;%
 
 # View the subjects with fewer than 40 trials
 print(subjects_with_fewer_than_40_trials)</code></pre>
-<pre><code>## # A tibble: 8 × 2
-##   part_ID    trial_count
-##   &lt;chr&gt;            &lt;int&gt;
-## 1 Guest07             31
-## 2 Guest11             16
-## 3 Guest14              1
-## 4 Guest17             11
-## 5 Guest19             13
-## 6 Guest20             31
-## 7 Guest22             14
-## 8 Students13           6</code></pre>
+<pre><code>## # A tibble: 0 × 2
+## # ℹ 2 variables: part_ID &lt;chr&gt;, trial_count &lt;int&gt;</code></pre>
 <pre class="r"><code># Filter to find subjects with at least half of the trials
 subjects_with_40_or_more_trials &lt;- subject_trial_count %&gt;%
   filter(trial_count &gt;= 40)
@@ -777,7 +752,7 @@ Reaction_Time_Sugary &lt;- select(
 <h2>Dataset containing one row per participant</h2>
 <pre class="r"><code>#Create a new dataset containing one row per participant and calculating the mean values for each measures
 All_Measures_PerPart &lt;- All_Measures_PerTrial %&gt;%
-  group_by(part_ID, sugar_craving, fat_craving) %&gt;%
+  group_by(part_ID, sugar_craving, fat_craving, unhealthy_craving) %&gt;%
   summarize(
     Rel_DT_Sugary_mean = mean(Rel_DT_Sugary, na.rm = TRUE),
     Rel_DT_Sugary_sd = sd(Rel_DT_Sugary, na.rm = TRUE),

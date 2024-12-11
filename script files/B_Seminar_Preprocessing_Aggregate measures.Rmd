@@ -60,6 +60,13 @@ setwd(file.path(PreprocessMainDir))
 All_Part_Data <- read_csv(file = "All_Part_FixBehav_Data.csv")
 ```
 
+## Unhealthy food craving
+
+```{r}
+#ADD A COLUMN WHICH INDICATES THE MEAN CRAVING FOR UNHEALTHY FOOD
+All_Part_Data$unhealthy_craving <- rowMeans(All_Part_Data[, c("sugar_craving", "fat_craving")])
+```
+
 ## Number of fixations
 
 ```{r message=FALSE}
@@ -69,6 +76,7 @@ NbFix <- All_Part_Data %>%
     part_ID,
     sugar_craving,
     fat_craving,
+    unhealthy_craving,
     trial_id,
     Left_Picture,
     Right_Picture,
@@ -115,6 +123,7 @@ DwellTime <- All_Part_Data %>%
     part_ID,
     sugar_craving,
     fat_craving,
+    unhealthy_craving,
     trial_id,
     Left_Picture,
     Right_Picture,
@@ -168,6 +177,7 @@ FirstFix <- All_Part_Data_with_fixation_order %>%
     part_ID,
     sugar_craving,
     fat_craving,
+    unhealthy_craving,
     trial_id,
     Left_Picture,
     Right_Picture,
@@ -208,12 +218,14 @@ first_fix <- select(
   part_ID,
   sugar_craving,
   fat_craving,
+  unhealthy_craving,
   trial_id,
   first_fix_Salty,
   first_fix_Sugary, 
   first_fix_Unhealthy
 )
 ```
+
 
 # Merge measures in one single dataset
 
@@ -408,7 +420,7 @@ Reaction_Time_Sugary <- select(
 ```{r message=FALSE}
 #Create a new dataset containing one row per participant and calculating the mean values for each measures
 All_Measures_PerPart <- All_Measures_PerTrial %>%
-  group_by(part_ID, sugar_craving, fat_craving) %>%
+  group_by(part_ID, sugar_craving, fat_craving, unhealthy_craving) %>%
   summarize(
     Rel_DT_Sugary_mean = mean(Rel_DT_Sugary, na.rm = TRUE),
     Rel_DT_Sugary_sd = sd(Rel_DT_Sugary, na.rm = TRUE),
