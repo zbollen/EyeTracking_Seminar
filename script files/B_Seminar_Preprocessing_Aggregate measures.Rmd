@@ -157,8 +157,7 @@ dwell_time$Rel_DT_Unhealthy <- round(
   ifelse(!is.na(dwell_time$DT_Sugary), 
          dwell_time$DT_Sugary / dwell_time$DT_Total, 
          dwell_time$DT_Salty / dwell_time$DT_Total),
-  2
-)
+  2)
 ```
 
 ## First fixation

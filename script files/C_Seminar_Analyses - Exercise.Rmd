@@ -72,7 +72,20 @@ ggplot(All_Measures_PerPart, aes(x=sugar_craving)) +
   )
 
 # histogram for salty craving
-xx
+ggplot(All_Measures_PerPart, aes(x=fat_craving)) + 
+  geom_histogram(color="black", fill="darkblue", binwidth = 1, alpha = 0.5) +
+  labs(title = "Distribution of salty craving",
+       x = "Salty craving",
+       y = "Participant count") +
+  theme_minimal() +
+  scale_y_continuous(breaks = seq(0, 5, by = 1)) +
+  scale_x_continuous(breaks = seq(0, 100, by = 10), limits = c(0, 100)) + 
+  geom_vline(aes(xintercept = mean_salty_craving), color = "grey", linetype = "dashed", size = 1) + 
+  geom_text(aes(x = mean_salty_craving, y = 5, label = paste("Mean =", round(mean_salty_craving, 2))), 
+            color = "darkgrey", vjust = 1, hjust = -0.25) + 
+  theme(
+    plot.title = element_text(hjust = 0.5) 
+  )
 ```
 
 ## Reaction time
@@ -92,7 +105,7 @@ ggplot(All_Measures_PerTrial, aes(x = Congruence, y = response_time, fill = Cong
 ### Reaction time and craving
 
 ```{r message=FALSE}
-# Scatter plot for Relative dwell time on unhealthy food and craving
+# Scatter plot for Reaction time on unhealthy food and craving
 ggplot(All_Measures_PerPart, aes(x = unhealthy_craving, y = RT_AB_score)) +
   geom_point() +
   geom_smooth(method = "lm", col = "blue") +
@@ -135,8 +148,15 @@ ggplot(Sugary_trials, aes(x = factor(AOI_visited), fill = factor(First_Fix))) +
 ### first fixation on unhealthy food and craving
 
 ```{r message=FALSE}
-# Scatter plot for First fixation on unhealthy food and  craving
-xx
+# Scatter plot for First fixation on unhealthy food and craving
+ggplot(All_Measures_PerPart, aes(x = unhealthy_craving, y = first_fix_Unhealthy_mean)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(x = "Craving for unhealthy food",
+       y = "First fixation on unhealthy food") +
+  theme_minimal() +
+  ylim(0, 1) +
+  xlim(0, 100)
 ```
 
 ## Dwell time
