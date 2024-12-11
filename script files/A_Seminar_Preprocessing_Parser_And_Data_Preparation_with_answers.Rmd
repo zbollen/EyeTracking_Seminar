@@ -116,51 +116,96 @@ d_raw <- read_csv(gaze_data_file)
 d_raw
 ```
 
-```{r filter valid data}
-
-#Check if you have unvalid fixations
-unique(d_raw$combined_gazePoint2d_isValid)
-
-#Drop unvalid gaze samples   
-d_raw_valid <- subset(d_raw, combined_gazePoint2d_isValid == TRUE)
-
-#Check your filter data
-unique(d_raw_valid$combined_gazePoint2d_isValid)
+```{r}
+# Initialize a table to track the applied exclusion criteria
+filter_summary <- data.frame(
+  Criterion = character(),    # Name of the criterion
+  Kept = integer(),           # Number of gaze samples retained
+  Removed = integer(),        # Number of gaze samples removed
+  Percentage_Removed = numeric() # Percentage of gaze samples removed
+)
 ```
 
-```{r filter fixations inside the screen}
+```{r filter samples during the interest time period}
+# Criterion 1: Gaze samples during pictures presentation
+criterion_name <- "Gaze points during the period of interest"
 
-#Check the range positions of all fixations on the x and y coordinates.  
-range(d_raw_valid$combined_gazePoint2dCompensated_x)
-range(d_raw_valid$combined_gazePoint2dCompensated_y)
+# Number of samples before filtering
+total_rows <- nrow(d_raw)
+
+#filter the data to only include fixations during the presentation of the pictures
+d_pictures <- subset(d_raw, label == "Pictures_Onset") #
+
+# After filtering
+kept <- nrow(d_pictures)
+removed <- total_rows - kept
+percentage_removed <- (removed / total_rows) * 100
+
+# Add the criterion to the summary table
+filter_summary <- rbind(filter_summary, data.frame(
+  Criterion = criterion_name,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
+```
+
+```{r filter valid data}
+# Criterion 2: No loss data (e.g., blinks)
+criterion_name <- "Valid gaze points"
+
+# Number of samples before filtering
+total_rows <- nrow(d_pictures)
+
+#Apply the exclusion criterion by dropping loss data   
+d_pictures_valid <- subset(d_pictures, combined_gazePoint2d_isValid == TRUE)
+
+# After filtering
+kept <- nrow(d_pictures_valid)
+removed <- total_rows - kept
+percentage_removed <- (removed / total_rows) * 100
+
+# Add the criterion to the summary table
+filter_summary <- rbind(filter_summary, data.frame(
+  Criterion = criterion_name,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
+```
+
+```{r filter samples inside the screen}
+# Criterion 3: No gaze samples outside the screen
+criterion_name <- "Gaze points inside the screen"
+
+# Number of samples before filtering
+total_rows <- nrow(d_pictures_valid)
 
 # since sx and sy should be the normalized x/y coordinates of the 2d gaze point, everything >0 and <1 should be on the screen and everything else should be excluded
 
-# Drop drift-compensated fixations outside the screen        
-d_valid_screen <- subset(
-  d_raw_valid,
+# Apply the exclusion criterion by dropping drift-compensated fixations outside the screen        
+d <- subset(
+  d_pictures_valid,
   combined_gazePoint2dCompensated_x > screen_X_min &
     combined_gazePoint2dCompensated_x < screen_X_max &
     combined_gazePoint2dCompensated_y > screen_Y_min &
     combined_gazePoint2dCompensated_y < screen_Y_max
 ) 
 
-#Check your filter data
-range(d_valid_screen$combined_gazePoint2dCompensated_x)
-range(d_valid_screen$combined_gazePoint2dCompensated_y)
+# After filtering
+kept <- nrow(d)
+removed <- total_rows - kept
+percentage_removed <- (removed / total_rows) * 100
+
+# Add the criterion to the summary table
+filter_summary <- rbind(filter_summary, data.frame(
+  Criterion = criterion_name,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
 ```
 
-```{r filter fixations during the interest time period}
-
-#Check your logged messages
-unique(d_valid_screen$label)
-
-#filter the data to only include fixations during the presentation of the pictures
-d <- subset(d_valid_screen, label == "Pictures_Onset") #
-
-#Check your filter data
-unique(d$label)
-```
 
 ## Run parser on participant raw data
 
@@ -500,9 +545,15 @@ dev.off()
 
 # Data reduction procedure
 
-## Criteria 1: Exclude trials with half of fixations outside AOIs
+## Exclude trials with half of fixations outside AOIs
 
 ```{r}
+# Criterion 4: Trials with min half of fixations inside AOIs
+criterion_name <- "Trials with > 50% fixations inside AOIs"
+
+# Number of trials before filtering
+total_trials <- 80
+
 #Count the number of fixations outside AOIs
 sum(is.na(All_Data$AOI_visited))
 
@@ -523,27 +574,63 @@ trials_to_exclude <- fixation_counts %>%
   filter(NA_more_than_sum) %>%
   select(trial_id)
 
-#Count the number of trials to exclude based on this criteria
-count(trials_to_exclude)
-
 # Remove these trials from the original dataset
 All_Data_cleaned <- All_Data %>%
   anti_join(trials_to_exclude, by = c("trial_id"))
+
+# After filtering
+removed <- ifelse(nrow(trials_to_exclude) > 0, nrow(trials_to_exclude), 0)
+kept <- total_trials - removed
+percentage_removed <- (removed / total_rows) * 100
+
+# Add the criterion to the summary table
+filter_summary <- rbind(filter_summary, data.frame(
+  Criterion = criterion_name,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
+
 ```
 
 ## Remove all fixations outside AOIs in the dataset
 
 ```{r}
+# Criterion 5: Fixations inside AOIs
+criterion_name <- "Fixations inside AOIs"
+
+# Number of trials before filtering
+total_fixations <- nrow(All_Data_cleaned)
+
 #Count the number of remaining fixations outside AOIs
 sum(is.na(All_Data_cleaned$AOI_visited))
 
 #Remove rows with fixations outside AOIs
 All_AOI_Data <- All_Data_cleaned[!is.na(All_Data_cleaned$AOI_visited),]
+
+# After filtering
+kept <- nrow(All_AOI_Data)
+removed <- total_fixations - kept
+percentage_removed <- (removed / total_rows) * 100
+
+# Add the criterion to the summary table
+filter_summary <- rbind(filter_summary, data.frame(
+  Criterion = criterion_name,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
 ```
 
-# Save merged data per participant in a csv file
+# Save data
+
+## Save merged data per participant in a csv file
 
 ```{r warning=FALSE}
+#add participant number in the dataset
+All_AOI_Data <- All_AOI_Data %>%
+  mutate(part_ID = part_ID)
+
 #create a folder for merged data for each participant
 AllSubDirFix <- "Each_Part_Fix_Outputs"
 
@@ -555,11 +642,31 @@ if (file.exists(AllSubDirFix)){
   
 }
 
-#add participant number in the dataset
-All_AOI_Data <- All_AOI_Data %>%
-  mutate(part_ID = part_ID)
-
 #save file for merged behavior and fixation data for each part
 write.csv(All_AOI_Data, file = paste(part_ID,"_BEHAVandFIX.csv",sep=""), row.names = FALSE)
 
 ```
+
+## Save data quality for each participant in a csv file
+
+```{r warning=FALSE}
+#add participant number in the dataset
+filter_summary <- filter_summary %>%
+  mutate(part_ID = part_ID)
+
+#create a folder for data quality for each participant
+DataQuality <- "Each_Part_Data_Quality"
+
+if (file.exists(DataQuality)){
+  setwd(file.path(PreprocessMainDir, DataQuality))
+} else {
+  dir.create(file.path(PreprocessMainDir, DataQuality))
+  setwd(file.path(PreprocessMainDir, DataQuality))
+  
+}
+
+#save file for data quality
+write.csv(filter_summary, file = paste(part_ID,"_DataQuality.csv",sep=""), row.names = FALSE)
+
+```
+

@@ -226,7 +226,6 @@ first_fix <- select(
 )
 ```
 
-
 # Merge measures in one single dataset
 
 ```{r}
