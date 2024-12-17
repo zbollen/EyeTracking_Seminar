@@ -58,8 +58,8 @@ gaze_data_file \<- "[Copy-paste the name of the gaze file of the participant]"
 # Change the following values for each participant
 date <- "06.11.2024"
 group <- "Students"
-computer_number <- "07" #put a zero before single digit
-gaze_data_file <- "20241106T122516_PSY-NEUROSOZ-07_CET_7_gaze.csv"
+computer_number <- "12" #put a zero before single digit
+gaze_data_file <- "20241106T123431_PSY-NEUROSOZ-12_CET_12_gaze.csv"
 
 ```
 
@@ -112,8 +112,6 @@ Filter the data to only include gaze samples that (1) are valid, (2) are drift c
 #load participant raw data
 setwd (file.path(RawMainDir,PartSubDir))
 d_raw <- read_csv(gaze_data_file)
-
-d_raw
 ```
 
 ```{r}
@@ -128,7 +126,7 @@ filter_summary <- data.frame(
 
 ```{r filter samples during the interest time period}
 # Criterion 1: Gaze samples during pictures presentation
-criterion_name <- "Gaze points during the period of interest"
+criterion_1 <- "Gaze points during the period of interest"
 
 # Number of samples before filtering
 total_rows <- nrow(d_raw)
@@ -143,7 +141,7 @@ percentage_removed <- (removed / total_rows) * 100
 
 # Add the criterion to the summary table
 filter_summary <- rbind(filter_summary, data.frame(
-  Criterion = criterion_name,
+  Criterion = criterion_1,
   Kept = kept,
   Removed = removed,
   Percentage_Removed = round(percentage_removed, 2)
@@ -152,7 +150,7 @@ filter_summary <- rbind(filter_summary, data.frame(
 
 ```{r filter valid data}
 # Criterion 2: No loss data (e.g., blinks)
-criterion_name <- "Valid gaze points"
+criterion_2 <- "Valid gaze points"
 
 # Number of samples before filtering
 total_rows <- nrow(d_pictures)
@@ -167,7 +165,7 @@ percentage_removed <- (removed / total_rows) * 100
 
 # Add the criterion to the summary table
 filter_summary <- rbind(filter_summary, data.frame(
-  Criterion = criterion_name,
+  Criterion = criterion_2,
   Kept = kept,
   Removed = removed,
   Percentage_Removed = round(percentage_removed, 2)
@@ -176,7 +174,7 @@ filter_summary <- rbind(filter_summary, data.frame(
 
 ```{r filter samples inside the screen}
 # Criterion 3: No gaze samples outside the screen
-criterion_name <- "Gaze points inside the screen"
+criterion_3 <- "Gaze points inside the screen"
 
 # Number of samples before filtering
 total_rows <- nrow(d_pictures_valid)
@@ -199,13 +197,12 @@ percentage_removed <- (removed / total_rows) * 100
 
 # Add the criterion to the summary table
 filter_summary <- rbind(filter_summary, data.frame(
-  Criterion = criterion_name,
+  Criterion = criterion_3,
   Kept = kept,
   Removed = removed,
   Percentage_Removed = round(percentage_removed, 2)
 ))
 ```
-
 
 ## Run parser on participant raw data
 
@@ -545,68 +542,20 @@ dev.off()
 
 # Data reduction procedure
 
-## Exclude trials with half of fixations outside AOIs
-
-```{r}
-# Criterion 4: Trials with min half of fixations inside AOIs
-criterion_name <- "Trials with > 50% fixations inside AOIs"
-
-# Number of trials before filtering
-total_trials <- 80
-
-#Count the number of fixations outside AOIs
-sum(is.na(All_Data$AOI_visited))
-
-# Count the number of fixations for each AOI_visited value by participant and trial
-fixation_counts <- All_Data %>%
-  group_by(trial_id) %>%
-  summarize(
-    Healthy_count = sum(AOI_visited == "Healthy", na.rm = TRUE),
-    Salty_count = sum(AOI_visited == "Salty", na.rm = TRUE),
-    Sugary_count = sum(AOI_visited == "Sugary", na.rm = TRUE),
-    NA_count = sum(is.na(AOI_visited)),
-    NA_more_than_sum = NA_count > (Healthy_count + Salty_count + Sugary_count)
-  ) %>%
-  ungroup()
-
-# Filter out the trials where NA_count is greater than the sum of Money_count and Carbon_count
-trials_to_exclude <- fixation_counts %>%
-  filter(NA_more_than_sum) %>%
-  select(trial_id)
-
-# Remove these trials from the original dataset
-All_Data_cleaned <- All_Data %>%
-  anti_join(trials_to_exclude, by = c("trial_id"))
-
-# After filtering
-removed <- ifelse(nrow(trials_to_exclude) > 0, nrow(trials_to_exclude), 0)
-kept <- total_trials - removed
-percentage_removed <- (removed / total_rows) * 100
-
-# Add the criterion to the summary table
-filter_summary <- rbind(filter_summary, data.frame(
-  Criterion = criterion_name,
-  Kept = kept,
-  Removed = removed,
-  Percentage_Removed = round(percentage_removed, 2)
-))
-
-```
-
 ## Remove all fixations outside AOIs in the dataset
 
 ```{r}
-# Criterion 5: Fixations inside AOIs
-criterion_name <- "Fixations inside AOIs"
+# Criterion 4: Fixations inside AOIs
+criterion_4 <- "Fixations inside AOIs"
 
 # Number of trials before filtering
-total_fixations <- nrow(All_Data_cleaned)
+total_fixations <- nrow(All_Data)
 
 #Count the number of remaining fixations outside AOIs
-sum(is.na(All_Data_cleaned$AOI_visited))
+sum(is.na(All_Data$AOI_visited))
 
 #Remove rows with fixations outside AOIs
-All_AOI_Data <- All_Data_cleaned[!is.na(All_Data_cleaned$AOI_visited),]
+All_AOI_Data <- All_Data[!is.na(All_Data$AOI_visited),]
 
 # After filtering
 kept <- nrow(All_AOI_Data)
@@ -615,7 +564,7 @@ percentage_removed <- (removed / total_rows) * 100
 
 # Add the criterion to the summary table
 filter_summary <- rbind(filter_summary, data.frame(
-  Criterion = criterion_name,
+  Criterion = criterion_4,
   Kept = kept,
   Removed = removed,
   Percentage_Removed = round(percentage_removed, 2)
@@ -669,4 +618,3 @@ if (file.exists(DataQuality)){
 write.csv(filter_summary, file = paste(part_ID,"_DataQuality.csv",sep=""), row.names = FALSE)
 
 ```
-

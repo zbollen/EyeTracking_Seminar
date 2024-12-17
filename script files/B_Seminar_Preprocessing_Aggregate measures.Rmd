@@ -51,6 +51,26 @@ setwd(file.path(PreprocessMainDir))
 write.csv(All_Part_Data, file = paste("All_Part_FixBehav_Data.csv",sep=""), row.names = FALSE)
 ```
 
+## Load and merge data quality of all participants
+
+```{r warning=FALSE}
+#set the path
+PreprocessMainDir <- '../preprocessed data'
+AllSubDataQual <- "Each_Part_Data_Quality"
+
+setwd(file.path(PreprocessMainDir, AllSubDataQual))
+
+#load and merge all participants data
+files_to_upload2 <- list.files(pattern="*.csv")
+DataQuality_list <-lapply(files_to_upload2, read.csv)
+Each_Part_Data_Qual<-bind_rows(DataQuality_list)
+```
+
+```{r}
+setwd(file.path(PreprocessMainDir))
+write.csv(All_Part_Data_Qual, file = paste("All_Part_FixBehav_DataQuality.csv",sep=""), row.names = FALSE)
+```
+
 # Aggregate measures
 
 ```{r warning=FALSE, message=FALSE}
@@ -239,29 +259,65 @@ All_Measures_PerTrial <- Reduce(function(x, y) merge(x, y, all=TRUE), list_measu
 
 # Data reduction procedure
 
+```{r}
+# Initialize a table to track the applied exclusion criteria
+filter_AllPart_summary <- data.frame(
+  Criterion = character(),    # Name of the criterion
+  Kept = integer(),           # Number of trials or participants retained
+  Removed = integer(),        # Number of trials or participants removed
+  Percentage_Removed = numeric() # Percentage of trials or participants removed
+)
+```
+
+
 ## Exclude trials with uncorrect responses
 
 Remove all trials in which participants did not answer correctly to the probe
 
 ```{r}
+# Criterion 5: Correct trials
+criterion_5 <- "Trials with correct responses"
+
 # Count the number of trials where accuracy = 0
 num_uncorrect_trials <- All_Measures_PerTrial %>%
-  group_by(trial_id) %>%
-  summarise(uncorrect = any(accuracy == 0)) %>%
-  filter(uncorrect) %>%
-  nrow()
+  filter(accuracy == 0) %>%               
+  distinct(part_ID, trial_id) %>%  
+  nrow()  
+
+# Count the number of trials where accuracy = 1
+num_correct_trials <- All_Measures_PerTrial %>%
+  filter(accuracy == 1) %>%               
+  distinct(part_ID, trial_id) %>%  
+  nrow()  
 
 # Print the result
 print(num_uncorrect_trials)
+print(num_correct_trials)
 
 # Keep only rows where responses are correct
 All_Measures_PerTrial <- subset(All_Measures_PerTrial, accuracy == 1)
 All_Measures_PerAOI <- subset(All_Measures_PerAOI, accuracy == 1)
+
+# After filtering
+removed <- num_uncorrect_trials
+kept <- num_correct_trials
+percentage_removed <- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary <- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_5,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
 ```
 
 ## Exclude trials when response time \< 200ms
 
 ```{r}
+# Criterion 6: Trials with RT > 200ms
+criterion_6 <- "Trials with RT > 200ms"
+
 # Filter to find trials with decision < 200ms
 trials_RT_lower_200ms <- All_Measures_PerTrial %>%
   filter(response_time < 200)
@@ -274,11 +330,27 @@ All_Measures_PerTrial <- All_Measures_PerTrial %>%
   filter(response_time >= 200)
 All_Measures_PerAOI <- All_Measures_PerAOI %>%
   filter(response_time >= 200)
+
+# After filtering
+removed <- nrow(trials_RT_lower_200ms)
+kept <- nrow(All_Measures_PerTrial)
+percentage_removed <- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary <- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_6,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
 ```
 
 ## Exclude trials when response time \> 2000ms
 
 ```{r}
+# Criterion 7: Trials with RT < 2000ms
+criterion_7 <- "Trials with RT < 2000ms"
+
 # Filter to find trials with decision > 2000ms
 trials_RT_higher_2000ms <- All_Measures_PerTrial %>%
   filter(response_time > 2000)
@@ -291,11 +363,31 @@ All_Measures_PerTrial <- All_Measures_PerTrial %>%
   filter(response_time <= 2000)
 All_Measures_PerAOI <- All_Measures_PerAOI %>%
   filter(response_time <= 2000)
+
+# After filtering
+removed <- nrow(trials_RT_higher_2000ms)
+kept <- nrow(All_Measures_PerTrial)
+percentage_removed <- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary <- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_7,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
 ```
 
-## Exclude participants with half of trials without fixations
+## Exclude participants with half of trials without fixations on AOIs
 
 ```{r}
+# Criterion 8: Starer participants
+criterion_8 <- "Participants with min 50% of trials with fixations on AOIs"
+
+# Number of trials and participants before filtering
+total_trials <- nrow(All_Measures_PerTrial)
+total_part <- length(unique(All_Measures_PerTrial$part_ID))
+
 # Create a summary of the number of trials per subject
 subject_trial_count <- All_Measures_PerTrial %>%
   group_by(part_ID) %>%
@@ -314,10 +406,23 @@ subjects_with_40_or_more_trials <- subject_trial_count %>%
   filter(trial_count >= 40)
 
 # Exclude the participant(s) 
-All_Measures_PerTrial <- All_Measures_PerTrial %>%
+All_Measures_PerTrial_Cleaned <- All_Measures_PerTrial %>%
   filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)
-All_Measures_PerAOI <- All_Measures_PerAOI %>%
+All_Measures_PerAOI_Cleaned <- All_Measures_PerAOI %>%
   filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)
+
+# After filtering
+removed <- nrow(subjects_with_fewer_than_40_trials)
+kept <- total_part - removed
+percentage_removed <- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary <- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_8,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))
 ```
 
 # Calculate reaction time AB scores
@@ -456,11 +561,33 @@ All_Measures_PerPart <- All_Measures_PerPart %>%
 setwd(file.path(PreprocessMainDir))
 
 #Save one file containing one row per AOI visited
-write.csv(All_Measures_PerAOI, file = paste("AllMeasures_ForAnalysis_PerAOI.csv",sep=""), row.names = FALSE)
+write.csv(All_Measures_PerAOI_Cleaned, file = paste("AllMeasures_ForAnalysis_PerAOI.csv",sep=""), row.names = FALSE)
 
 #Save one file containing one row per trial
-write.csv(All_Measures_PerTrial, file = paste("AllMeasures_ForAnalysis_PerTrial.csv",sep=""), row.names = FALSE)
+write.csv(All_Measures_PerTrial_Cleaned, file = paste("AllMeasures_ForAnalysis_PerTrial.csv",sep=""), row.names = FALSE)
 
 #Save one file containing one row per part
 write.csv(All_Measures_PerPart, file = paste("AllMeasures_ForAnalysis_PerPart.csv",sep=""), row.names = FALSE)
 ```
+
+# Save data quality report
+
+## merge all criteria
+
+```{r warning=FALSE}
+All_Part_Data_Quality <- Each_Part_Data_Qual %>%
+  group_by(Criterion) %>%          
+  summarise(
+    Kept = sum(Kept), 
+    Removed = sum(Removed),
+    Percentage_Removed = (Removed / (Kept + Removed)) * 100
+  )
+
+All_Part_Data_Quality <- bind_rows(All_Part_Data_Quality, filter_AllPart_summary)
+
+#save file for data quality
+setwd(file.path(PreprocessMainDir))
+write.csv(All_Part_Data_Quality, file = paste("AllPart_DataQuality.csv",sep=""), row.names = FALSE)
+
+```
+

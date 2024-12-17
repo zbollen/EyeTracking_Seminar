@@ -1,0 +1,9 @@
+"Criterion","Kept","Removed","Percentage_Removed"
+"Fixations inside AOIs",5496,3981,42.0069642291865
+"Gaze points during the period of interest",220298,259140,54.0507844601387
+"Gaze points inside the screen",206808,151,0.0729613111775762
+"Valid gaze points",206959,13339,6.05498007244732
+"Trials with correct responses",1425,29,1.99
+"Trials with RT > 200ms",1425,0,0
+"Trials with RT < 2000ms",1421,4,0.28
+"Participants with min 50% of trials with fixations on AOIs",19,3,13.64

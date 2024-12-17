@@ -1,0 +1,5 @@
+"Criterion","Kept","Removed","Percentage_Removed","part_ID"
+"Gaze points during the period of interest",9996,9720,49.3,"Guest07"
+"Valid gaze points",9792,204,2.04,"Guest07"
+"Gaze points inside the screen",9784,8,0.08,"Guest07"
+"Fixations inside AOIs",129,187,1.91,"Guest07"
