@@ -11,7 +11,7 @@
 
 <meta name="author" content="Zoé Bollen" />
 
-<meta name="date" content="2024-12-11" />
+<meta name="date" content="2024-12-18" />
 
 <title>Pre-processing script - Merge all participants files and aggregate measures</title>
 
@@ -353,7 +353,7 @@ display: none;
 <h1 class="title toc-ignore">Pre-processing script - Merge all
 participants files and aggregate measures</h1>
 <h4 class="author">Zoé Bollen</h4>
-<h4 class="date">2024-12-11</h4>
+<h4 class="date">2024-12-18</h4>
 
 </div>
 
@@ -378,14 +378,33 @@ All_Part_Data&lt;-bind_rows(theData_list)</code></pre>
 <p>Check if all participants data are available by printing the number
 of participants and their individual participant codes.</p>
 <pre class="r"><code>length(unique(All_Part_Data$part_ID))</code></pre>
-<pre><code>## [1] 1</code></pre>
+<pre><code>## [1] 22</code></pre>
 <pre class="r"><code>unique(All_Part_Data$part_ID)</code></pre>
-<pre><code>## [1] &quot;Students07&quot;</code></pre>
+<pre><code>##  [1] &quot;Guest06&quot;    &quot;Guest07&quot;    &quot;Guest09&quot;    &quot;Guest10&quot;    &quot;Guest11&quot;   
+##  [6] &quot;Guest12&quot;    &quot;Guest13&quot;    &quot;Guest14&quot;    &quot;Guest15&quot;    &quot;Guest17&quot;   
+## [11] &quot;Guest19&quot;    &quot;Guest20&quot;    &quot;Guest21&quot;    &quot;Guest22&quot;    &quot;Students06&quot;
+## [16] &quot;Students07&quot; &quot;Students08&quot; &quot;Students09&quot; &quot;Students10&quot; &quot;Students11&quot;
+## [21] &quot;Students12&quot; &quot;Students13&quot;</code></pre>
 </div>
 <div id="save-merged-data-into-a-single-file" class="section level2">
 <h2>Save merged data into a single file</h2>
 <pre class="r"><code>setwd(file.path(PreprocessMainDir))
 write.csv(All_Part_Data, file = paste(&quot;All_Part_FixBehav_Data.csv&quot;,sep=&quot;&quot;), row.names = FALSE)</code></pre>
+</div>
+<div id="load-and-merge-data-quality-of-all-participants" class="section level2">
+<h2>Load and merge data quality of all participants</h2>
+<pre class="r"><code>#set the path
+PreprocessMainDir &lt;- &#39;../preprocessed data&#39;
+AllSubDataQual &lt;- &quot;Each_Part_Data_Quality&quot;
+
+setwd(file.path(PreprocessMainDir, AllSubDataQual))
+
+#load and merge all participants data
+files_to_upload2 &lt;- list.files(pattern=&quot;*.csv&quot;)
+DataQuality_list &lt;-lapply(files_to_upload2, read.csv)
+Each_Part_Data_Qual&lt;-bind_rows(DataQuality_list)</code></pre>
+<pre class="r"><code>setwd(file.path(PreprocessMainDir))
+write.csv(Each_Part_Data_Qual, file = paste(&quot;All_Part_FixBehav_DataQuality.csv&quot;,sep=&quot;&quot;), row.names = FALSE)</code></pre>
 </div>
 </div>
 <div id="aggregate-measures" class="section level1">
@@ -486,8 +505,7 @@ dwell_time$Rel_DT_Unhealthy &lt;- round(
   ifelse(!is.na(dwell_time$DT_Sugary), 
          dwell_time$DT_Sugary / dwell_time$DT_Total, 
          dwell_time$DT_Salty / dwell_time$DT_Total),
-  2
-)</code></pre>
+  2)</code></pre>
 </div>
 <div id="first-fixation" class="section level2">
 <h2>First fixation</h2>
@@ -565,27 +583,60 @@ All_Measures_PerTrial &lt;- Reduce(function(x, y) merge(x, y, all=TRUE), list_me
 </div>
 <div id="data-reduction-procedure" class="section level1">
 <h1>Data reduction procedure</h1>
+<pre class="r"><code># Initialize a table to track the applied exclusion criteria
+filter_AllPart_summary &lt;- data.frame(
+  Criterion = character(),    # Name of the criterion
+  Kept = integer(),           # Number of trials or participants retained
+  Removed = integer(),        # Number of trials or participants removed
+  Percentage_Removed = numeric() # Percentage of trials or participants removed
+)</code></pre>
 <div id="exclude-trials-with-uncorrect-responses" class="section level2">
 <h2>Exclude trials with uncorrect responses</h2>
 <p>Remove all trials in which participants did not answer correctly to
 the probe</p>
-<pre class="r"><code># Count the number of trials where accuracy = 0
+<pre class="r"><code># Criterion 5: Correct trials
+criterion_5 &lt;- &quot;Trials with correct responses&quot;
+
+# Count the number of trials where accuracy = 0
 num_uncorrect_trials &lt;- All_Measures_PerTrial %&gt;%
-  group_by(trial_id) %&gt;%
-  summarise(uncorrect = any(accuracy == 0)) %&gt;%
-  filter(uncorrect) %&gt;%
-  nrow()
+  filter(accuracy == 0) %&gt;%               
+  distinct(part_ID, trial_id) %&gt;%  
+  nrow()  
+
+# Count the number of trials where accuracy = 1
+num_correct_trials &lt;- All_Measures_PerTrial %&gt;%
+  filter(accuracy == 1) %&gt;%               
+  distinct(part_ID, trial_id) %&gt;%  
+  nrow()  
 
 # Print the result
 print(num_uncorrect_trials)</code></pre>
-<pre><code>## [1] 0</code></pre>
+<pre><code>## [1] 29</code></pre>
+<pre class="r"><code>print(num_correct_trials)</code></pre>
+<pre><code>## [1] 1425</code></pre>
 <pre class="r"><code># Keep only rows where responses are correct
 All_Measures_PerTrial &lt;- subset(All_Measures_PerTrial, accuracy == 1)
-All_Measures_PerAOI &lt;- subset(All_Measures_PerAOI, accuracy == 1)</code></pre>
+All_Measures_PerAOI &lt;- subset(All_Measures_PerAOI, accuracy == 1)
+
+# After filtering
+removed &lt;- num_uncorrect_trials
+kept &lt;- num_correct_trials
+percentage_removed &lt;- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary &lt;- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_5,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))</code></pre>
 </div>
 <div id="exclude-trials-when-response-time-200ms" class="section level2">
 <h2>Exclude trials when response time &lt; 200ms</h2>
-<pre class="r"><code># Filter to find trials with decision &lt; 200ms
+<pre class="r"><code># Criterion 6: Trials with RT &gt; 200ms
+criterion_6 &lt;- &quot;Trials with RT &gt; 200ms&quot;
+
+# Filter to find trials with decision &lt; 200ms
 trials_RT_lower_200ms &lt;- All_Measures_PerTrial %&gt;%
   filter(response_time &lt; 200)
 
@@ -605,37 +656,92 @@ print(trials_RT_lower_200ms)</code></pre>
 All_Measures_PerTrial &lt;- All_Measures_PerTrial %&gt;%
   filter(response_time &gt;= 200)
 All_Measures_PerAOI &lt;- All_Measures_PerAOI %&gt;%
-  filter(response_time &gt;= 200)</code></pre>
+  filter(response_time &gt;= 200)
+
+# After filtering
+removed &lt;- nrow(trials_RT_lower_200ms)
+kept &lt;- nrow(All_Measures_PerTrial)
+percentage_removed &lt;- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary &lt;- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_6,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))</code></pre>
 </div>
 <div id="exclude-trials-when-response-time-2000ms" class="section level2">
 <h2>Exclude trials when response time &gt; 2000ms</h2>
-<pre class="r"><code># Filter to find trials with decision &gt; 2000ms
+<pre class="r"><code># Criterion 7: Trials with RT &lt; 2000ms
+criterion_7 &lt;- &quot;Trials with RT &lt; 2000ms&quot;
+
+# Filter to find trials with decision &gt; 2000ms
 trials_RT_higher_2000ms &lt;- All_Measures_PerTrial %&gt;%
   filter(response_time &gt; 2000)
 
 # Print the result
 print(trials_RT_higher_2000ms)</code></pre>
 <pre><code>##      part_ID sugar_craving fat_craving unhealthy_craving trial_id Left_Picture
-## 1 Students07            90          60                75       32           FL
+## 1    Guest09            90          70                80       14           FL
+## 2    Guest19            60          30                45       73           FS
+## 3 Students07            90          60                75       32           FL
+## 4 Students09            80          80                80        5           FF
 ##   Right_Picture accuracy response_time Congruence DT_Healthy DT_Salty DT_Sugary
-## 1            FF        1          2476          1    652.006  566.989        NA
+## 1            FF        1          2021          0    650.009  183.002        NA
+## 2            FL        1          2385          1      0.000       NA       264
+## 3            FF        1          2476          1    652.006  566.989        NA
+## 4            FL        1          2137          1   1065.343  267.993        NA
 ##   DT_Total Rel_DT_Salty Rel_DT_Sugary Rel_DT_Unhealthy first_fix_Salty
-## 1  1218.99         0.47            NA             0.47               0
+## 1   833.01         0.22            NA             0.22               0
+## 2   264.00           NA             1             1.00              NA
+## 3  1218.99         0.47            NA             0.47               0
+## 4  1333.34         0.20            NA             0.20               1
 ##   first_fix_Sugary first_fix_Unhealthy FixCount_Healthy FixCount_Salty
-## 1               NA                   0                4              4
+## 1               NA                   0                2              1
+## 2                1                   1                0             NA
+## 3               NA                   0                4              4
+## 4               NA                   1                6              2
 ##   FixCount_Sugary FixCount_Total Rel_FixCount_Salty Rel_FixCount_Sugary
-## 1              NA              8                0.5                  NA
+## 1              NA              3               0.33                  NA
+## 2               1              1                 NA                   1
+## 3              NA              8               0.50                  NA
+## 4              NA              8               0.25                  NA
 ##   Rel_FixCount_Unhealthy
-## 1                    0.5</code></pre>
+## 1                   0.33
+## 2                   1.00
+## 3                   0.50
+## 4                   0.25</code></pre>
 <pre class="r"><code># Exclude those trials
 All_Measures_PerTrial &lt;- All_Measures_PerTrial %&gt;%
   filter(response_time &lt;= 2000)
 All_Measures_PerAOI &lt;- All_Measures_PerAOI %&gt;%
-  filter(response_time &lt;= 2000)</code></pre>
+  filter(response_time &lt;= 2000)
+
+# After filtering
+removed &lt;- nrow(trials_RT_higher_2000ms)
+kept &lt;- nrow(All_Measures_PerTrial)
+percentage_removed &lt;- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary &lt;- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_7,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))</code></pre>
 </div>
-<div id="exclude-participants-with-half-of-trials-without-fixations" class="section level2">
-<h2>Exclude participants with half of trials without fixations</h2>
-<pre class="r"><code># Create a summary of the number of trials per subject
+<div id="exclude-participants-with-half-of-trials-without-fixations-on-aois" class="section level2">
+<h2>Exclude participants with half of trials without fixations on
+AOIs</h2>
+<pre class="r"><code># Criterion 8: Starer participants
+criterion_8 &lt;- &quot;Participants with min 50% of trials with fixations on AOIs&quot;
+
+# Number of trials and participants before filtering
+total_trials &lt;- nrow(All_Measures_PerTrial)
+total_part &lt;- length(unique(All_Measures_PerTrial$part_ID))
+
+# Create a summary of the number of trials per subject
 subject_trial_count &lt;- All_Measures_PerTrial %&gt;%
   group_by(part_ID) %&gt;%
   summarize(trial_count = n()) %&gt;%
@@ -647,17 +753,34 @@ subjects_with_fewer_than_40_trials &lt;- subject_trial_count %&gt;%
 
 # View the subjects with fewer than 40 trials
 print(subjects_with_fewer_than_40_trials)</code></pre>
-<pre><code>## # A tibble: 0 × 2
-## # ℹ 2 variables: part_ID &lt;chr&gt;, trial_count &lt;int&gt;</code></pre>
+<pre><code>## # A tibble: 3 × 2
+##   part_ID    trial_count
+##   &lt;chr&gt;            &lt;int&gt;
+## 1 Guest14             19
+## 2 Guest19             32
+## 3 Students13          38</code></pre>
 <pre class="r"><code># Filter to find subjects with at least half of the trials
 subjects_with_40_or_more_trials &lt;- subject_trial_count %&gt;%
   filter(trial_count &gt;= 40)
 
 # Exclude the participant(s) 
-All_Measures_PerTrial &lt;- All_Measures_PerTrial %&gt;%
+All_Measures_PerTrial_Cleaned &lt;- All_Measures_PerTrial %&gt;%
   filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)
-All_Measures_PerAOI &lt;- All_Measures_PerAOI %&gt;%
-  filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)</code></pre>
+All_Measures_PerAOI_Cleaned &lt;- All_Measures_PerAOI %&gt;%
+  filter(part_ID %in% subjects_with_40_or_more_trials$part_ID)
+
+# After filtering
+removed &lt;- nrow(subjects_with_fewer_than_40_trials)
+kept &lt;- total_part - removed
+percentage_removed &lt;- (removed / (removed + kept)) * 100
+
+# Add the criterion to the summary table
+filter_AllPart_summary &lt;- rbind(filter_AllPart_summary, data.frame(
+  Criterion = criterion_8,
+  Kept = kept,
+  Removed = removed,
+  Percentage_Removed = round(percentage_removed, 2)
+))</code></pre>
 </div>
 </div>
 <div id="calculate-reaction-time-ab-scores" class="section level1">
@@ -788,13 +911,32 @@ All_Measures_PerPart &lt;- All_Measures_PerPart %&gt;%
 <pre class="r"><code>setwd(file.path(PreprocessMainDir))
 
 #Save one file containing one row per AOI visited
-write.csv(All_Measures_PerAOI, file = paste(&quot;AllMeasures_ForAnalysis_PerAOI.csv&quot;,sep=&quot;&quot;), row.names = FALSE)
+write.csv(All_Measures_PerAOI_Cleaned, file = paste(&quot;AllMeasures_ForAnalysis_PerAOI.csv&quot;,sep=&quot;&quot;), row.names = FALSE)
 
 #Save one file containing one row per trial
-write.csv(All_Measures_PerTrial, file = paste(&quot;AllMeasures_ForAnalysis_PerTrial.csv&quot;,sep=&quot;&quot;), row.names = FALSE)
+write.csv(All_Measures_PerTrial_Cleaned, file = paste(&quot;AllMeasures_ForAnalysis_PerTrial.csv&quot;,sep=&quot;&quot;), row.names = FALSE)
 
 #Save one file containing one row per part
 write.csv(All_Measures_PerPart, file = paste(&quot;AllMeasures_ForAnalysis_PerPart.csv&quot;,sep=&quot;&quot;), row.names = FALSE)</code></pre>
+</div>
+</div>
+<div id="save-data-quality-report" class="section level1">
+<h1>Save data quality report</h1>
+<div id="merge-all-criteria" class="section level2">
+<h2>merge all criteria</h2>
+<pre class="r"><code>All_Part_Data_Quality &lt;- Each_Part_Data_Qual %&gt;%
+  group_by(Criterion) %&gt;%          
+  summarise(
+    Kept = sum(Kept), 
+    Removed = sum(Removed),
+    Percentage_Removed = (Removed / (Kept + Removed)) * 100
+  )
+
+All_Part_Data_Quality &lt;- bind_rows(All_Part_Data_Quality, filter_AllPart_summary)
+
+#save file for data quality
+setwd(file.path(PreprocessMainDir))
+write.csv(All_Part_Data_Quality, file = paste(&quot;AllPart_DataQuality.csv&quot;,sep=&quot;&quot;), row.names = FALSE)</code></pre>
 </div>
 </div>
 

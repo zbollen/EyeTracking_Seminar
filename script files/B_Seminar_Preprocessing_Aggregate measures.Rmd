@@ -68,7 +68,7 @@ Each_Part_Data_Qual<-bind_rows(DataQuality_list)
 
 ```{r}
 setwd(file.path(PreprocessMainDir))
-write.csv(All_Part_Data_Qual, file = paste("All_Part_FixBehav_DataQuality.csv",sep=""), row.names = FALSE)
+write.csv(Each_Part_Data_Qual, file = paste("All_Part_FixBehav_DataQuality.csv",sep=""), row.names = FALSE)
 ```
 
 # Aggregate measures
