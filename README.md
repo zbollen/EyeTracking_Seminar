@@ -2,7 +2,7 @@
 
 The repository contains 4 folders:
 1) raw data: all the original and unmodified raw data from participants tested during the lab session (students and guests)
-2) preprocessing data: all the data preprocessed and saved from our scripts
+2) preprocessed data: all the data preprocessed and saved from our scripts
 3) parser: the parser for eye-tracking raw data
 4) script files: the pre-processing and analysis scripts (some scripts to complete in class and some scripts with answers)
 
